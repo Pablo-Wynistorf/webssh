@@ -179,12 +179,11 @@ app.get('/connect', async (req, res) => {
 io.on('connection', (socket) => {
     console.log('Client connected');
 
-    // Track the session ID for the socket
     let currentSessionId = null;
 
     socket.on('join', (sessionId) => {
         socket.join(sessionId);
-        currentSessionId = sessionId; // Track session ID in a variable
+        currentSessionId = sessionId;
         console.log(`Client joined session ${sessionId}`);
 
         if (clientCounts[sessionId] === undefined) {
