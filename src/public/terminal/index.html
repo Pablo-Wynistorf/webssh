@@ -34,7 +34,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        // Parse the query parameters to get the session ID
         const urlParams = new URLSearchParams(window.location.search);
         const sessionId = urlParams.get('sessionId');
         
@@ -45,7 +44,6 @@
 
         const socket = io();
 
-        // Join the session
         socket.emit('join', sessionId);
 
         const terminalContainer = document.getElementById('terminal-container');
@@ -56,17 +54,14 @@
         terminal.open(terminalContainer);
         fitAddon.fit();
 
-        // Emit data with session ID
         terminal.onData((data) => {
             socket.emit('data', { sessionId, data });
         });
 
-        // Handle data with session ID
         socket.on('data', (message) => {
             terminal.write(message);
         });
 
-        // Adjust terminal size when window is resized
         window.addEventListener('resize', () => {
             fitAddon.fit();
         });

@@ -19,10 +19,8 @@ app.use(express.static('public'));
 
 const upload = multer({ dest: 'uploads/' });
 
-// Store active connections by session ID
 let activeConnections = {};
 
-// Serve the login page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login', 'index.html'));
 });
@@ -31,7 +29,6 @@ app.post('/terminal', upload.single('privateKey'), (req, res) => {
     const { hostname, username, password } = req.body;
     const privateKeyPath = req.file ? req.file.path : null;
 
-    // Generate a unique session ID
     const sessionId = uuidv4();
 
     res.redirect(`/terminal?sessionId=${sessionId}`);
@@ -71,7 +68,7 @@ app.post('/terminal', upload.single('privateKey'), (req, res) => {
     }).connect(sshConfig);
 });
 
-// Serve the terminal page
+
 app.get('/terminal', (req, res) => {
     const sessionId = req.query.sessionId;
 
@@ -82,7 +79,7 @@ app.get('/terminal', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'terminal', 'index.html'));
 });
 
-// Handle direct connections via URL
+
 app.get('/connect', async (req, res) => {
     const { hostname, username, password, privateKeyUrl } = req.query;
 
@@ -90,7 +87,6 @@ app.get('/connect', async (req, res) => {
         return res.status(400).send('Missing required parameters: username and hostname');
     }
 
-    // Generate a unique session ID
     const sessionId = uuidv4();
 
     let privateKeyPath = null;
@@ -146,7 +142,7 @@ app.get('/connect', async (req, res) => {
     }).connect(sshConfig);
 });
 
-// Serve the terminal page
+
 app.get('/terminal', (req, res) => {
     const sessionId = req.query.sessionId;
 
@@ -157,7 +153,7 @@ app.get('/terminal', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'terminal', 'index.html'));
 });
 
-// Handle WebSocket connections
+
 io.on('connection', (socket) => {
     console.log('Client connected');
 
@@ -175,7 +171,6 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('Client disconnected');
-        // Handle cleanup if necessary
     });
 });
 
