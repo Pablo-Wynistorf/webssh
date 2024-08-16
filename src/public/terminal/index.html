@@ -20,6 +20,7 @@
         #terminal-container {
             width: 100%;
             height: 100%;
+            overflow: hidden;
         }
         .xterm {
             height: 100%;
@@ -34,36 +35,44 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const sessionId = urlParams.get('sessionId');
-        
-        if (!sessionId) {
-            alert('No session ID provided!');
-            throw new Error('Session ID is missing');
-        }
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const sessionId = urlParams.get('sessionId');
+            
+            if (!sessionId) {
+                alert('No session ID provided!');
+                throw new Error('Session ID is missing');
+            }
 
-        const socket = io();
+            const socket = io();
 
-        socket.emit('join', sessionId);
+            socket.emit('join', sessionId);
 
-        const terminalContainer = document.getElementById('terminal-container');
-        const terminal = new Terminal();
-        const fitAddon = new FitAddon.FitAddon();
+            const terminalContainer = document.getElementById('terminal-container');
+            const terminal = new Terminal({
+                fontSize: 14,  
+                cursorBlink: true
+            });
+            const fitAddon = new FitAddon.FitAddon();
 
-        terminal.loadAddon(fitAddon);
-        terminal.open(terminalContainer);
-        fitAddon.fit();
-
-        terminal.onData((data) => {
-            socket.emit('data', { sessionId, data });
-        });
-
-        socket.on('data', (message) => {
-            terminal.write(message);
-        });
-
-        window.addEventListener('resize', () => {
+            terminal.loadAddon(fitAddon);
+            terminal.open(terminalContainer);
             fitAddon.fit();
+
+            terminal.onData((data) => {
+                socket.emit('data', { sessionId, data });
+            });
+
+            socket.on('data', (message) => {
+                terminal.write(message);
+            });
+
+            function fitTerminal() {
+                fitAddon.fit();
+            }
+
+            window.addEventListener('resize', fitTerminal);
+            window.addEventListener('load', fitTerminal);
         });
     </script>
 </body>
