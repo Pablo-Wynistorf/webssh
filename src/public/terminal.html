@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web SSH Terminal</title>
+    <link rel="icon" type="image/png" href="assets/icon.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+        #terminal-container {
+            width: 100%;
+            height: 100%;
+        }
+        .xterm {
+            height: 100%;
+            width: 100%;
+            color: #00ff00;
+        }
+    </style>
+</head>
+<body>
+    <div id="terminal-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        const terminalContainer = document.getElementById('terminal-container');
+        const terminal = new Terminal();
+        const fitAddon = new FitAddon.FitAddon();
+
+        terminal.loadAddon(fitAddon);
+        terminal.open(terminalContainer);
+        fitAddon.fit();
+
+        socket.on('data', (data) => {
+            terminal.write(data);
+        });
+
+        terminal.onData((data) => {
+            socket.emit('data', data);
+        });
+    </script>
+</body>
+</html>

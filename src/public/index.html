@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web SSH Login</title>
+    <link rel="icon" type="image/png" href="assets/icon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="h-screen flex justify-center items-center bg-gray-900 text-gray-200">
+    <div class="bg-gray-800 p-8 rounded-lg shadow-lg max-w-md w-full">
+        <h1 class="text-2xl font-bold mb-6 text-center">Web SSH</h1>
+        <form action="/terminal" method="post" enctype="multipart/form-data" class="space-y-4">
+            <div>
+                <label for="hostname" class="block text-sm font-semibold mb-1">Hostname:</label>
+                <input type="text" id="hostname" name="hostname" required class="w-full p-2 bg-gray-700 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <div>
+                <label for="username" class="block text-sm font-semibold mb-1">Username:</label>
+                <input type="text" id="username" name="username" required class="w-full p-2 bg-gray-700 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <div class="flex items-center space-x-4 mb-4">
+                <label class="inline-flex items-center">
+                    <input type="radio" name="authType" value="password" checked class="form-radio text-blue-500">
+                    <span class="ml-2 text-sm font-medium">Password Authentication</span>
+                </label>
+                <label class="inline-flex items-center">
+                    <input type="radio" name="authType" value="privateKey" class="form-radio text-blue-500">
+                    <span class="ml-2 text-sm font-medium">Private Key Authentication</span>
+                </label>
+            </div>
+
+            <div id="passwordSection">
+                <label for="password" class="block text-sm font-semibold mb-1">Password:</label>
+                <input type="password" id="password" name="password" class="w-full p-2 bg-gray-700 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <div id="privateKeySection" class="hidden">
+                <label for="privateKey" class="block text-sm font-semibold mb-1">Private Key:</label>
+                <input type="file" id="privateKey" name="privateKey" class="w-full p-2 bg-gray-700 border border-gray-600 rounded focus:outline-none">
+            </div>
+
+            <button type="submit" class="w-full p-3 bg-blue-600 rounded hover:bg-blue-700 text-white font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">Connect</button>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const passwordSection = document.getElementById('passwordSection');
+            const privateKeySection = document.getElementById('privateKeySection');
+            const authTypeRadios = document.querySelectorAll('input[name="authType"]');
+
+            const updateAuthFields = () => {
+                const selectedAuthType = document.querySelector('input[name="authType"]:checked').value;
+                if (selectedAuthType === 'password') {
+                    passwordSection.classList.remove('hidden');
+                    privateKeySection.classList.add('hidden');
+                } else {
+                    passwordSection.classList.add('hidden');
+                    privateKeySection.classList.remove('hidden');
+                }
+            };
+            
+            updateAuthFields();
+
+            authTypeRadios.forEach(radio => {
+                radio.addEventListener('change', updateAuthFields);
+            });
+        });
+    </script>
+</body>
+
+</html>
