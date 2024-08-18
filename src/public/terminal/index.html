@@ -36,44 +36,45 @@
     <script src="/socket.io/socket.io.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const sessionId = urlParams.get('sessionId');
-            
-            if (!sessionId) {
-                alert('No session ID provided!');
-                throw new Error('Session ID is missing');
-            }
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionToken = urlParams.get('sessionToken');
 
-            const socket = io();
+    if (!sessionToken) {
+        alert('The session token is required!');
+        throw new Error('Session token is missing');
+    }
 
-            socket.emit('join', sessionId);
+    const socket = io();
 
-            const terminalContainer = document.getElementById('terminal-container');
-            const terminal = new Terminal({
-                fontSize: 14,  
-                cursorBlink: true
-            });
-            const fitAddon = new FitAddon.FitAddon();
+    socket.emit('join', { sessionToken });
 
-            terminal.loadAddon(fitAddon);
-            terminal.open(terminalContainer);
-            fitAddon.fit();
+    const terminalContainer = document.getElementById('terminal-container');
+    const terminal = new Terminal({
+        fontSize: 14,
+        cursorBlink: true
+    });
+    const fitAddon = new FitAddon.FitAddon();
 
-            terminal.onData((data) => {
-                socket.emit('data', { sessionId, data });
-            });
+    terminal.loadAddon(fitAddon);
+    terminal.open(terminalContainer);
+    fitAddon.fit();
 
-            socket.on('data', (message) => {
-                terminal.write(message);
-            });
+    terminal.onData((data) => {
+        socket.emit('data', { sessionToken, data });
+    });
 
-            function fitTerminal() {
-                fitAddon.fit();
-            }
+    socket.on('data', (message) => {
+        terminal.write(message);
+    });
 
-            window.addEventListener('resize', fitTerminal);
-            window.addEventListener('load', fitTerminal);
-        });
+    function fitTerminal() {
+        fitAddon.fit();
+    }
+
+    window.addEventListener('resize', fitTerminal);
+    window.addEventListener('load', fitTerminal);
+});
+
     </script>
 </body>
 </html>

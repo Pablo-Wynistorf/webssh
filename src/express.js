@@ -17,8 +17,8 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIO(server);
 
-const jwtSecret = process.env.JWT_SECRET;
-const port = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET;
+const PORT = process.env.PORT || 3000;
 
 const verifyToken = (req, res, next) => {
     const token = req.query.sessionToken || req.headers['authorization'];
@@ -28,11 +28,12 @@ const verifyToken = (req, res, next) => {
 
     const bearerToken = token.startsWith('Bearer ') ? token.slice(7) : token;
 
-    jwt.verify(bearerToken, jwtSecret, (err, decoded) => {
+    jwt.verify(bearerToken, JWT_SECRET, (err, decoded) => {
         if (err) {
             return res.status(401).send('Invalid Token');
         }
         req.sessionId = decoded.sessionId;
+        req.sessionToken = bearerToken;
         next();
     });
 };
@@ -44,6 +45,7 @@ const upload = multer({ dest: 'uploads/' });
 
 let activeConnections = {};
 let clientCounts = {};
+let disconnectTimers = {};
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login', 'index.html'));
@@ -54,9 +56,9 @@ app.post('/terminal', upload.single('privateKey'), (req, res) => {
     const privateKeyPath = req.file ? req.file.path : null;
 
     const sessionId = uuidv4();
-    const token = jwt.sign({ sessionId }, jwtSecret, { expiresIn: '1h' });
+    const sessionToken = jwt.sign({ sessionId }, JWT_SECRET, { expiresIn: '1h' });
 
-    res.redirect(`/terminal?sessionId=${sessionId}&sessionToken=${token}`);
+    res.redirect(`/terminal?sessionToken=${sessionToken}`);
 
     const conn = new Client();
     const sshConfig = {
@@ -73,26 +75,26 @@ app.post('/terminal', upload.single('privateKey'), (req, res) => {
         conn.shell((err, stream) => {
             if (err) {
                 io.to(sessionId).emit('data', '\r\n*** SSH SHELL ERROR: ' + err.message + ' ***\r\n');
-                cleanUpPrivateKey(privateKeyPath); 
+                cleanUpPrivateKey(privateKeyPath);
                 return;
             }
 
             activeConnections[sessionId] = { conn, stream };
-            clientCounts[sessionId] = 0;
+            clientCounts[sessionId] = 1;
 
             cleanUpPrivateKey(privateKeyPath);
 
             stream.on('data', (data) => {
                 io.to(sessionId).emit('data', data.toString('utf-8'));
             }).on('close', () => {
-                console.log(`Client disconnected for session ${sessionId}`);
+                console.log(`SSH stream closed for session ${sessionId}`);
             });
         });
     }).on('end', () => {
-        console.log(`Client disconnected for session ${sessionId}`);
+        console.log(`SSH connection ended for session ${sessionId}`);
     }).on('error', (err) => {
         io.to(sessionId).emit('data', '\r\n*** SSH CONNECTION ERROR: ' + err.message + ' ***\r\n');
-        endSession(sessionId); 
+        endSession(sessionId);
     }).connect(sshConfig);
 });
 
@@ -100,7 +102,7 @@ app.get('/terminal', verifyToken, (req, res) => {
     const { sessionId } = req;
 
     if (!sessionId) {
-        return res.status(400).send('Invalid session ID');
+        return res.status(400).send('Invalid session token');
     }
 
     if (!activeConnections[sessionId]) {
@@ -118,7 +120,7 @@ app.get('/connect', async (req, res) => {
     }
 
     const sessionId = uuidv4();
-    const token = jwt.sign({ sessionId }, jwtSecret, { expiresIn: '1h' });
+    const sessionToken = jwt.sign({ sessionId }, JWT_SECRET, { expiresIn: '1h' });
 
     let privateKeyPath = null;
 
@@ -136,7 +138,7 @@ app.get('/connect', async (req, res) => {
 
     const decodedPassword = password ? Buffer.from(password, 'base64').toString('utf8') : undefined;
 
-    res.redirect(`/terminal?sessionId=${sessionId}&sessionToken=${token}`);
+    res.redirect(`/terminal?sessionToken=${sessionToken}`);
 
     const conn = new Client();
     const sshConfig = {
@@ -158,18 +160,18 @@ app.get('/connect', async (req, res) => {
             }
 
             activeConnections[sessionId] = { conn, stream };
-            clientCounts[sessionId] = 0;
+            clientCounts[sessionId] = 1;
 
             cleanUpPrivateKey(privateKeyPath);
 
             stream.on('data', (data) => {
                 io.to(sessionId).emit('data', data.toString('utf-8'));
             }).on('close', () => {
-                console.log(`Client disconnected for session ${sessionId}`);
+                console.log(`SSH stream closed for session ${sessionId}`);
             });
         });
     }).on('end', () => {
-        console.log(`Client disconnected for session ${sessionId}`);
+        console.log(`SSH connection ended for session ${sessionId}`);
     }).on('error', (err) => {
         io.to(sessionId).emit('data', '\r\n*** SSH CONNECTION ERROR: ' + err.message + ' ***\r\n');
         endSession(sessionId);
@@ -177,45 +179,72 @@ app.get('/connect', async (req, res) => {
 });
 
 io.on('connection', (socket) => {
-    console.log('Client connected');
-
     let currentSessionId = null;
 
-    socket.on('join', (sessionId) => {
-        socket.join(sessionId);
-        currentSessionId = sessionId;
-        console.log(`Client joined session ${sessionId}`);
-
-        if (clientCounts[sessionId] === undefined) {
-            clientCounts[sessionId] = 0;
+    socket.on('join', ({ sessionToken }) => {
+        if (!sessionToken) {
+            socket.emit('error', 'The session token is required');
+            socket.disconnect(true);
+            return;
         }
 
-        clientCounts[sessionId] += 1;
+        jwt.verify(sessionToken, JWT_SECRET, (err, decoded) => {
+            if (err || !decoded.sessionId) {
+                socket.emit('error', 'Invalid session token');
+                socket.disconnect(true);
+                return;
+            }
+
+            currentSessionId = decoded.sessionId;
+
+            if (!clientCounts[currentSessionId]) {
+                clientCounts[currentSessionId] = 1;
+            } else {
+                clientCounts[currentSessionId] += 1;
+            }
+
+            socket.join(currentSessionId);
+            if (disconnectTimers[currentSessionId]) {
+                clearTimeout(disconnectTimers[currentSessionId]);
+                delete disconnectTimers[currentSessionId];
+            }
+        });
     });
 
-    socket.on('data', ({ sessionId, data }) => {
-        const activeConnection = activeConnections[sessionId];
-        if (activeConnection && activeConnection.stream) {
-            activeConnection.stream.write(data);
+    socket.on('data', ({ data }) => {
+        if (currentSessionId && activeConnections[currentSessionId]) {
+            const { stream } = activeConnections[currentSessionId];
+            if (stream && stream.writable) {
+                stream.write(data);
+            } else {
+                console.error(`Stream for session ${currentSessionId} is not writable.`);
+            }
+        } else {
+            console.error(`No active connection for session ${currentSessionId}.`);
         }
     });
 
     socket.on('disconnect', () => {
-        console.log('Client disconnected');
 
         if (currentSessionId) {
-            clientCounts[currentSessionId] = (clientCounts[currentSessionId] || 0) - 1;
+            clientCounts[currentSessionId] = Math.max((clientCounts[currentSessionId] || 1) - 1, 0);
 
-            if (clientCounts[currentSessionId] <= 0) {
-                console.log(`No more clients for session ${currentSessionId}. Closing SSH connection.`);
-                endSession(currentSessionId);
-                delete clientCounts[currentSessionId];
+            if (clientCounts[currentSessionId] === 0) {
+                if (!disconnectTimers[currentSessionId]) {
+                    disconnectTimers[currentSessionId] = setTimeout(() => {
+                        endSession(currentSessionId);
+                        delete disconnectTimers[currentSessionId];
+                    }, 30000);
+                }
+            } else {
+                if (disconnectTimers[currentSessionId]) {
+                    clearTimeout(disconnectTimers[currentSessionId]);
+                    delete disconnectTimers[currentSessionId];
+                }
             }
         }
     });
 });
-
-
 
 function endSession(sessionId) {
     if (activeConnections[sessionId]) {
@@ -233,12 +262,12 @@ function cleanUpPrivateKey(privateKeyPath) {
             if (err) {
                 console.error('Failed to delete private key file:', err);
             } else {
-                console.log('Private key file deleted successfully.');
+                return;
             }
         });
     }
 }
 
-server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}`);
+server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
