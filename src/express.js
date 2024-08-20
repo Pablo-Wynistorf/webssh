@@ -47,10 +47,12 @@ let activeConnections = {};
 let clientCounts = {};
 let disconnectTimers = {};
 
+// Serve the login page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login', 'index.html'));
 });
 
+// Handle SSH terminal connection
 app.post('/terminal', upload.single('privateKey'), (req, res) => {
     const { hostname, username, password } = req.body;
     const privateKeyPath = req.file ? req.file.path : null;
@@ -60,7 +62,6 @@ app.post('/terminal', upload.single('privateKey'), (req, res) => {
 
     res.redirect(`/terminal?sessionToken=${sessionToken}`);
 
-    const conn = new Client();
     const sshConfig = {
         host: hostname,
         username: username,
@@ -68,36 +69,10 @@ app.post('/terminal', upload.single('privateKey'), (req, res) => {
         privateKey: privateKeyPath ? fs.readFileSync(privateKeyPath) : undefined,
     };
 
-    conn.on('ready', () => {
-        console.log(`SSH Connection Ready for session ${sessionId}`);
-        io.to(sessionId).emit('data', '\r\n*** SSH CONNECTION ESTABLISHED ***\r\n');
-
-        conn.shell((err, stream) => {
-            if (err) {
-                io.to(sessionId).emit('data', '\r\n*** SSH SHELL ERROR: ' + err.message + ' ***\r\n');
-                cleanUpPrivateKey(privateKeyPath);
-                return;
-            }
-
-            activeConnections[sessionId] = { conn, stream };
-            clientCounts[sessionId] = 1;
-
-            cleanUpPrivateKey(privateKeyPath);
-
-            stream.on('data', (data) => {
-                io.to(sessionId).emit('data', data.toString('utf-8'));
-            }).on('close', () => {
-                console.log(`SSH stream closed for session ${sessionId}`);
-            });
-        });
-    }).on('end', () => {
-        console.log(`SSH connection ended for session ${sessionId}`);
-    }).on('error', (err) => {
-        io.to(sessionId).emit('data', '\r\n*** SSH CONNECTION ERROR: ' + err.message + ' ***\r\n');
-        endSession(sessionId);
-    }).connect(sshConfig);
+    createSSHConnection(sessionId, sshConfig, privateKeyPath);
 });
 
+// Serve the terminal page if token is valid
 app.get('/terminal', verifyToken, (req, res) => {
     const { sessionId } = req;
 
@@ -112,6 +87,7 @@ app.get('/terminal', verifyToken, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'terminal', 'index.html'));
 });
 
+// Handle SSH connection with query parameters
 app.get('/connect', async (req, res) => {
     const { hostname, username, password, privateKeyUrl } = req.query;
 
@@ -140,7 +116,6 @@ app.get('/connect', async (req, res) => {
 
     res.redirect(`/terminal?sessionToken=${sessionToken}`);
 
-    const conn = new Client();
     const sshConfig = {
         host: hostname,
         username: username,
@@ -148,36 +123,10 @@ app.get('/connect', async (req, res) => {
         privateKey: privateKeyPath ? fs.readFileSync(privateKeyPath) : undefined,
     };
 
-    conn.on('ready', () => {
-        console.log(`SSH Connection Ready for session ${sessionId}`);
-        io.to(sessionId).emit('data', '\r\n*** SSH CONNECTION ESTABLISHED ***\r\n');
-
-        conn.shell((err, stream) => {
-            if (err) {
-                io.to(sessionId).emit('data', '\r\n*** SSH SHELL ERROR: ' + err.message + ' ***\r\n');
-                cleanUpPrivateKey(privateKeyPath);
-                return;
-            }
-
-            activeConnections[sessionId] = { conn, stream };
-            clientCounts[sessionId] = 1;
-
-            cleanUpPrivateKey(privateKeyPath);
-
-            stream.on('data', (data) => {
-                io.to(sessionId).emit('data', data.toString('utf-8'));
-            }).on('close', () => {
-                console.log(`SSH stream closed for session ${sessionId}`);
-            });
-        });
-    }).on('end', () => {
-        console.log(`SSH connection ended for session ${sessionId}`);
-    }).on('error', (err) => {
-        io.to(sessionId).emit('data', '\r\n*** SSH CONNECTION ERROR: ' + err.message + ' ***\r\n');
-        endSession(sessionId);
-    }).connect(sshConfig);
+    createSSHConnection(sessionId, sshConfig, privateKeyPath);
 });
 
+// Socket.IO connection handling
 io.on('connection', (socket) => {
     let currentSessionId = null;
 
@@ -225,7 +174,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-
         if (currentSessionId) {
             clientCounts[currentSessionId] = Math.max((clientCounts[currentSessionId] || 1) - 1, 0);
 
@@ -246,6 +194,41 @@ io.on('connection', (socket) => {
     });
 });
 
+// Function to handle SSH connection
+function createSSHConnection(sessionId, sshConfig, privateKeyPath) {
+    const conn = new Client();
+
+    conn.on('ready', () => {
+        console.log(`SSH Connection Ready for session ${sessionId}`);
+        io.to(sessionId).emit('data', '\r\n*** SSH CONNECTION ESTABLISHED ***\r\n');
+
+        conn.shell((err, stream) => {
+            if (err) {
+                io.to(sessionId).emit('data', '\r\n*** SSH SHELL ERROR: ' + err.message + ' ***\r\n');
+                cleanUpPrivateKey(privateKeyPath);
+                return;
+            }
+
+            activeConnections[sessionId] = { conn, stream };
+            clientCounts[sessionId] = 1;
+
+            cleanUpPrivateKey(privateKeyPath);
+
+            stream.on('data', (data) => {
+                io.to(sessionId).emit('data', data.toString('utf-8'));
+            }).on('close', () => {
+                console.log(`SSH stream closed for session ${sessionId}`);
+            });
+        });
+    }).on('end', () => {
+        console.log(`SSH connection ended for session ${sessionId}`);
+    }).on('error', (err) => {
+        io.to(sessionId).emit('data', '\r\n*** SSH CONNECTION ERROR: ' + err.message + ' ***\r\n');
+        endSession(sessionId);
+    }).connect(sshConfig);
+}
+
+// Function to end an SSH session
 function endSession(sessionId) {
     if (activeConnections[sessionId]) {
         const { conn } = activeConnections[sessionId];
@@ -256,13 +239,12 @@ function endSession(sessionId) {
     }
 }
 
+// Function to clean up private key files
 function cleanUpPrivateKey(privateKeyPath) {
     if (privateKeyPath) {
         fs.unlink(privateKeyPath, (err) => {
             if (err) {
                 console.error('Failed to delete private key file:', err);
-            } else {
-                return;
             }
         });
     }
