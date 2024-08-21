@@ -153,10 +153,12 @@ io.on('connection', (socket) => {
             }
 
             socket.join(currentSessionId);
+
             if (disconnectTimers[currentSessionId]) {
                 clearTimeout(disconnectTimers[currentSessionId]);
                 delete disconnectTimers[currentSessionId];
             }
+            socket.emit('requestTerminalSize');
         });
     });
 
@@ -173,33 +175,44 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('resize', ({ rows, cols }) => {
+        if (currentSessionId && activeConnections[currentSessionId]) {
+            const { stream } = activeConnections[currentSessionId];
+            if (stream && stream.setWindow) {
+                stream.setWindow(rows, cols, 0, 0);
+            } else {
+                return;
+            }
+        } else {
+            console.error(`No active connection for session ${currentSessionId}.`);
+        }
+    });
+
     socket.on('disconnect', () => {
         if (currentSessionId) {
             clientCounts[currentSessionId] = Math.max((clientCounts[currentSessionId] || 1) - 1, 0);
 
             if (clientCounts[currentSessionId] === 0) {
-                if (!disconnectTimers[currentSessionId]) {
-                    disconnectTimers[currentSessionId] = setTimeout(() => {
-                        endSession(currentSessionId);
-                        delete disconnectTimers[currentSessionId];
-                    }, 30000);
-                }
-            } else {
-                if (disconnectTimers[currentSessionId]) {
-                    clearTimeout(disconnectTimers[currentSessionId]);
-                    delete disconnectTimers[currentSessionId];
-                }
+                disconnectTimers[currentSessionId] = setTimeout(() => {
+                    if (activeConnections[currentSessionId]) {
+                        const { conn } = activeConnections[currentSessionId];
+                        conn.end();
+                        delete activeConnections[currentSessionId];
+                        delete clientCounts[currentSessionId];
+                        console.log(`SSH connection for session ${currentSessionId} has been terminated due to inactivity.`);
+                    }
+                }, 60000);
             }
         }
     });
 });
 
-// Function to handle SSH connection
+
+
 function createSSHConnection(sessionId, sshConfig, privateKeyPath) {
     const conn = new Client();
 
     conn.on('ready', () => {
-        console.log(`SSH Connection Ready for session ${sessionId}`);
         io.to(sessionId).emit('data', '\r\n*** SSH CONNECTION ESTABLISHED ***\r\n');
 
         conn.shell((err, stream) => {
@@ -217,8 +230,9 @@ function createSSHConnection(sessionId, sshConfig, privateKeyPath) {
             stream.on('data', (data) => {
                 io.to(sessionId).emit('data', data.toString('utf-8'));
             }).on('close', () => {
-                console.log(`SSH stream closed for session ${sessionId}`);
             });
+
+            io.to(sessionId).emit('requestTerminalSize');
         });
     }).on('end', () => {
         console.log(`SSH connection ended for session ${sessionId}`);
@@ -228,28 +242,16 @@ function createSSHConnection(sessionId, sshConfig, privateKeyPath) {
     }).connect(sshConfig);
 }
 
-// Function to end an SSH session
-function endSession(sessionId) {
-    if (activeConnections[sessionId]) {
-        const { conn } = activeConnections[sessionId];
-        conn.end();
-        delete activeConnections[sessionId];
-        delete clientCounts[sessionId];
-        console.log(`Session ${sessionId} terminated.`);
-    }
-}
 
-// Function to clean up private key files
 function cleanUpPrivateKey(privateKeyPath) {
     if (privateKeyPath) {
         fs.unlink(privateKeyPath, (err) => {
-            if (err) {
-                console.error('Failed to delete private key file:', err);
-            }
+            if (err) console.error(`Failed to delete private key file: ${err.message}`);
+            else return;
         });
     }
 }
 
 server.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
