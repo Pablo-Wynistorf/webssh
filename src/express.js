@@ -194,20 +194,12 @@ io.on('connection', (socket) => {
 
             if (clientCounts[currentSessionId] === 0) {
                 disconnectTimers[currentSessionId] = setTimeout(() => {
-                    if (activeConnections[currentSessionId]) {
-                        const { conn } = activeConnections[currentSessionId];
-                        conn.end();
-                        delete activeConnections[currentSessionId];
-                        delete clientCounts[currentSessionId];
-                        console.log(`SSH connection for session ${currentSessionId} has been terminated due to inactivity.`);
-                    }
+                    endSession(currentSessionId);
                 }, 60000);
             }
         }
     });
 });
-
-
 
 function createSSHConnection(sessionId, sshConfig, privateKeyPath) {
     const conn = new Client();
@@ -219,6 +211,7 @@ function createSSHConnection(sessionId, sshConfig, privateKeyPath) {
             if (err) {
                 io.to(sessionId).emit('data', '\r\n*** SSH SHELL ERROR: ' + err.message + ' ***\r\n');
                 cleanUpPrivateKey(privateKeyPath);
+                endSession(sessionId);
                 return;
             }
 
@@ -230,24 +223,34 @@ function createSSHConnection(sessionId, sshConfig, privateKeyPath) {
             stream.on('data', (data) => {
                 io.to(sessionId).emit('data', data.toString('utf-8'));
             }).on('close', () => {
+                endSession(sessionId);
             });
 
             io.to(sessionId).emit('requestTerminalSize');
         });
     }).on('end', () => {
         console.log(`SSH connection ended for session ${sessionId}`);
+        endSession(sessionId);
     }).on('error', (err) => {
         io.to(sessionId).emit('data', '\r\n*** SSH CONNECTION ERROR: ' + err.message + ' ***\r\n');
         endSession(sessionId);
     }).connect(sshConfig);
 }
 
+function endSession(sessionId) {
+    if (activeConnections[sessionId]) {
+        const { conn } = activeConnections[sessionId];
+        conn.end();
+        delete activeConnections[sessionId];
+        delete clientCounts[sessionId];
+        console.log(`Session ${sessionId} terminated.`);
+    }
+}
 
 function cleanUpPrivateKey(privateKeyPath) {
     if (privateKeyPath) {
         fs.unlink(privateKeyPath, (err) => {
             if (err) console.error(`Failed to delete private key file: ${err.message}`);
-            else return;
         });
     }
 }
