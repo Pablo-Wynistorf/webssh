@@ -20,6 +20,7 @@ const io = socketIO(server);
 const JWT_SECRET = process.env.JWT_SECRET;
 const PORT = process.env.PORT || 3000;
 
+
 const verifyToken = (req, res, next) => {
     const token = req.query.sessionToken || req.headers['authorization'];
     if (!token) {
@@ -38,6 +39,7 @@ const verifyToken = (req, res, next) => {
     });
 };
 
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
@@ -47,10 +49,12 @@ let activeConnections = {};
 let clientCounts = {};
 let disconnectTimers = {};
 
+
 // Serve the login page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login', 'index.html'));
 });
+
 
 // Handle SSH terminal connection
 app.post('/terminal', upload.single('privateKey'), (req, res) => {
@@ -72,6 +76,7 @@ app.post('/terminal', upload.single('privateKey'), (req, res) => {
     createSSHConnection(sessionId, sshConfig, privateKeyPath);
 });
 
+
 // Serve the terminal page if token is valid
 app.get('/terminal', verifyToken, (req, res) => {
     const { sessionId } = req;
@@ -86,6 +91,7 @@ app.get('/terminal', verifyToken, (req, res) => {
 
     res.sendFile(path.join(__dirname, 'public', 'terminal', 'index.html'));
 });
+
 
 // Handle SSH connection with query parameters
 app.get('/connect', async (req, res) => {
@@ -125,6 +131,7 @@ app.get('/connect', async (req, res) => {
 
     createSSHConnection(sessionId, sshConfig, privateKeyPath);
 });
+
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -201,6 +208,7 @@ io.on('connection', (socket) => {
     });
 });
 
+
 function createSSHConnection(sessionId, sshConfig, privateKeyPath) {
     const conn = new Client();
 
@@ -237,6 +245,7 @@ function createSSHConnection(sessionId, sshConfig, privateKeyPath) {
     }).connect(sshConfig);
 }
 
+
 function endSession(sessionId) {
     if (activeConnections[sessionId]) {
         const { conn } = activeConnections[sessionId];
@@ -247,6 +256,7 @@ function endSession(sessionId) {
     }
 }
 
+
 function cleanUpPrivateKey(privateKeyPath) {
     if (privateKeyPath) {
         fs.unlink(privateKeyPath, (err) => {
@@ -254,6 +264,7 @@ function cleanUpPrivateKey(privateKeyPath) {
         });
     }
 }
+
 
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
