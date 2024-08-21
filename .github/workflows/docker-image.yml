@@ -27,6 +27,6 @@ jobs:
       - name: Build and push webssh
         uses: docker/build-push-action@v4
         with:
-          context: ./src
+          context: .
           push: true
           tags: pablo06/webssh:latest, pablo06/webssh:latest
