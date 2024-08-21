@@ -43,7 +43,9 @@ const verifyToken = (req, res, next) => {
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
+
 const upload = multer({ dest: 'uploads/' });
+
 
 let activeConnections = {};
 let clientCounts = {};
