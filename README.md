@@ -4,6 +4,11 @@
 
 This application provides a web-based SSH terminal interface using Node.js and Express. It supports file uploads for private keys, generates session tokens, and handles SSH connections with Socket.IO for real-time communication.
 
+## Use the application
+
+You can either self host this application for maximum privacy, or use our app hosted at: https://ssh.onedns.ch
+We guarantee that none of the used ssh key or password data is stored. (Just used to connect)
+
 ## Features
 
 - **Login Page**: Access the terminal application via a login page.
