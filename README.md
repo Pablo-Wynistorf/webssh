@@ -59,7 +59,8 @@ This application provides a web-based SSH terminal interface using Node.js and E
 
 3. **Connect with Query Parameters**
 
-   - **GET /connect**: Connect to an SSH server using query parameters. Example URL: `/connect?hostname=example.com&username=user&password=base64encodedpassword&privateKeyUrl=base64encodedurl`.
+   - **GET /connect**: Connect to an SSH server using query parameters. Example URL: `/connect?hostname=example.com&username=user&password=base64encodedpassword`.
+   - **GET /connect**: Connect to an SSH server using query parameters. Example URL: `/connect?hostname=example.com&username=user&privateKeyUrl=base64encodedurl`.
 
 4. **WebSocket Communication**
 
