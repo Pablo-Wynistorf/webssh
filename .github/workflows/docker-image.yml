@@ -13,13 +13,13 @@ jobs:
     steps:
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@latest
+        uses: docker/setup-buildx-action@v3.6.1
     
       - name: Checkout repository
-        uses: actions/checkout@latest
+        uses: actions/checkout@v4.1.7
 
       - name: Login to Docker Hub
-        uses: docker/login-action@latest
+        uses: docker/login-action@v3.3.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -33,7 +33,7 @@ jobs:
           echo "DATE_TAG=$DATE_TAG" >> $GITHUB_ENV
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@latest
+        uses: docker/build-push-action@v4
         with:
           context: .
           push: true
